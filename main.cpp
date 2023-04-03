@@ -1,8 +1,12 @@
 #include <iostream>
 enum link {linked, blocked, unknown};
 enum direction {stationary=-1, up, right, down, left};
+direction oppositeDir(direction dir) {
+    return direction((dir+2)%4);
+}
+
 struct Vector {
-    Vector(direction dir) {
+    explicit Vector(direction dir) {
         this->dir = dir;
         this->row = 0;
         this->column = 0;
@@ -19,7 +23,7 @@ struct Vector {
             column=-1;
         }
     }
-    char toChar() {
+    char toChar() const {
         if (dir == up){
             return 'U';
         }
@@ -35,12 +39,15 @@ struct Vector {
         return 'X';
     }
 
+    Vector opposite() const {
+        return * new Vector(oppositeDir(this->dir));
+    }
 
-    int row; int column; int dir;};
+
+    int row; int column; direction dir;};
 
 bool checkCorrectness(int n, int m, int **hints, link**** joints);
 bool solve(bool start, int n, int m, int **hints,  link**** joints, int, int, int, int);
-Vector findLinkDirection(int row, int col, link**** joints, link typeOfLink);
 
 
 
@@ -93,42 +100,10 @@ int main() {
 
 
     bool found = false;
-    char* solution = new char [n*m];
-    int i = 0;
-    int start_row;
-    int start_col;
-    for (start_row=0; start_row<n+1; start_row++){
-        for (start_col=0; start_col<m+1; start_col++){
+    for (int start_row=0; start_row<n+1; start_row++){
+        for (int start_col=0; start_col<m+1; start_col++){
             if (solve(true, n, m, hints, joints, start_row, start_col, start_row, start_col)) {
                 found = true;
-
-                Vector v = findLinkDirection(start_row, start_col, joints, linked);
-                solution[i++] = v.toChar();
-                int row = start_row + v.row;
-                int col = start_col + v.column;
-                int lastDir = v.dir;
-                while (row != start_row or col != start_col) {
-
-
-                    for (int dir = 0; dir < 4; dir ++) {
-                        if (*joints[row][col][dir] == linked){
-                            Vector v = * new Vector(static_cast<direction>(dir));
-
-                            if (v.dir != (lastDir+2)%4) {
-                                solution[i++] = v.toChar();
-                                row += v.row;
-                                col += v.column;
-                                lastDir = v.dir;
-                                break;
-                            }
-
-
-                        }
-                    }
-
-
-                }
-
                 break;
             }
         }
@@ -136,16 +111,10 @@ int main() {
             break;
         }
     }
-
-//    std::cout << std::endl << "Starting point:" << start_row << " " << start_col << "\t" << "Solution: " <<  solution << std::endl;
-    std::cout << start_col << " " << start_row << std::endl;
-    std::cout << solution;
-
-
 }
 
 
-int countHint(int row, int column, int **hints, link**** joints) {
+int countHint(int row, int column, link**** joints) {
     int count = 0;
     if (*joints[row][column][right] == linked) count++;
     if (*joints[row][column+1][down] == linked) count++;
@@ -158,16 +127,7 @@ int countHint(int row, int column, int **hints, link**** joints) {
 bool checkCorrectness(int n, int m, int **hints, link**** joints) {
     for (int row=0; row<n; row++){
         for (int column=0; column<m; column++){
-//            int count = 0;
-//            if (*joints[row][column][right] == linked) count++;
-//            if (*joints[row][column+1][down] == linked) count++;
-//            if (*joints[row+1][column+1][left] == linked) count++;
-//            if (*joints[row+1][column][up] == linked) count++;
-
-//            if (count != hints[row][column])
-//                return false;
-
-            if (countHint(row, column, hints, joints) != hints[row][column]) {
+            if (countHint(row, column, joints) != hints[row][column]) {
                 return false;
             }
         }
@@ -176,10 +136,10 @@ bool checkCorrectness(int n, int m, int **hints, link**** joints) {
 }
 
 
-
 bool solve(bool start, int n, int m, int** hints,  link**** joints, int row, int col, int start_row, int start_col) {
     if (!start and row == start_row and col == start_col){
         if (checkCorrectness(n, m, hints, joints)) {
+            std::cout << start_col << " " << start_row << std::endl;
             return true;
         } else {
             return false;
@@ -189,37 +149,51 @@ bool solve(bool start, int n, int m, int** hints,  link**** joints, int row, int
     for (int dir = 0; dir < 4; dir ++) {
         if (*joints[row][col][dir] == unknown){
             Vector v = * new Vector(static_cast<direction>(dir));
+
+            int count = 0;
+            for (int dir2 = 0; dir2 < 4; dir2 ++) {
+                if (*joints[row + v.row][col+v.column][dir2] == linked){
+                    count++;
+                }
+            }
+            if (count == 2){
+                continue;
+            }
+
+
             *joints[row][col][dir] = linked;
 
-
+            bool foundExceededHint = false;
             if (row-1 >= 0 and col-1 >= 0) {
-                if (countHint(row - 1, col - 1, hints, joints) > hints[row - 1][col - 1]){
-                    *joints[row][col][v.dir] = unknown;
-                    continue;
+                if (countHint(row - 1, col - 1, joints) > hints[row - 1][col - 1]){
+                    foundExceededHint = true;
                 }
             }
             if (row-1 >= 0 and col < m) {
-                if (countHint(row - 1, col, hints, joints) > hints[row - 1][col]){
-                    *joints[row][col][v.dir] = unknown;
-                    continue;
+                if (countHint(row - 1, col, joints) > hints[row - 1][col]){
+                    foundExceededHint = true;
                 }
             }
             if (row < n and col < m) {
-                if (countHint(row, col, hints, joints) > hints[row][col]){
-                    *joints[row][col][v.dir] = unknown;
-                    continue;
+                if (countHint(row, col, joints) > hints[row][col]){
+                    foundExceededHint = true;
                 }
             }
             if (row < n and col-1 >= 0) {
-                if (countHint(row, col - 1, hints, joints) > hints[row][col - 1]){
-                    *joints[row][col][v.dir] = unknown;
-                    continue;
+                if (countHint(row, col - 1, joints) > hints[row][col - 1]){
+                    foundExceededHint = true;
                 }
+            }
+
+            if (foundExceededHint){
+                *joints[row][col][v.dir] = unknown;
+                continue;
             }
 
 
             if (solve(false, n, m, hints, joints, row + v.row, col + v.column, start_row, start_col))
             {
+                std::cout << v.opposite().toChar();
                 return true;
             }
 
@@ -232,14 +206,3 @@ bool solve(bool start, int n, int m, int** hints,  link**** joints, int row, int
     return false;
 
 }
-
-Vector findLinkDirection(int row, int col, link**** joints, link typeOfLink) {
-    for (int dir = 0; dir < 4; dir ++) {
-        if (*joints[row][col][dir] == typeOfLink){
-            return * new Vector(static_cast<direction>(dir));
-        }
-    }
-    return * new Vector(stationary);
-}
-
-
